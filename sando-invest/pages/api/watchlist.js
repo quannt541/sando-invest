@@ -1,5 +1,6 @@
 // pages/api/watchlist.js
-import { getQuote, getHistory, computeSandoSignals, SANDO_WATCHLIST } from "../../lib/tcbs";
+import { getQuote, getHistory, computeSandoSignals } from "../../lib/tcbs";
+import { SANDO_WATCHLIST } from "../../lib/constants";
 
 export default async function handler(req, res) {
   try {

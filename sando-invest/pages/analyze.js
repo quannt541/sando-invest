@@ -4,7 +4,7 @@ import { useRouter } from "next/router";
 import Nav from "../components/Nav";
 import SignalBadge from "../components/SignalBadge";
 import MiniChart from "../components/MiniChart";
-import { SANDO_WATCHLIST } from "../lib/tcbs";
+import { SANDO_WATCHLIST } from "../lib/constants";
 
 export default function AnalyzePage() {
   const router = useRouter();
