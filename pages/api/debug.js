@@ -1,46 +1,48 @@
-// pages/api/debug.js — Test Yahoo Finance: /api/debug?ticker=VCB
+// pages/api/debug.js — Test all 3 data sources: /api/debug?ticker=VCB
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const ticker = (req.query.ticker || "VCB").toUpperCase();
-  const sym    = `${ticker}.VN`;
-  const results = {};
+  const t = (req.query.ticker || "VCB").toUpperCase();
 
-  try {
-    const YF = (await import("yahoo-finance2")).default;
-    const yf = new YF();
-    try { yf.suppressNotices(["yahooSurvey"]); } catch {}
-
-    // Test quote
+  async function testSource(name, url, headers = {}) {
     try {
-      const q = await yf.quote(sym);
-      results.quote = { ok: true, price: q?.regularMarketPrice, name: q?.longName };
-    } catch (e) {
-      results.quote = { ok: false, error: e.message };
-    }
-
-    // Test history (7 ngày)
-    try {
-      const to   = new Date();
-      const from = new Date(); from.setDate(from.getDate() - 7);
-      const h    = await yf.historical(sym, {
-        period1: from.toISOString().slice(0,10),
-        period2: to.toISOString().slice(0,10),
-        interval: "1d",
+      const r = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0", ...headers },
+        signal: AbortSignal.timeout(8000),
       });
-      results.history = { ok: true, count: h?.length, latest: h?.slice(-1)?.[0] };
+      const body = await r.text();
+      return { ok: r.ok, status: r.status, preview: body.slice(0, 150) };
     } catch (e) {
-      results.history = { ok: false, error: e.message };
+      return { ok: false, error: e.message };
     }
-
-  } catch (e) {
-    results.import_error = e.message;
   }
 
-  const allOk = results.quote?.ok && results.history?.ok;
+  const results = await Promise.all([
+    testSource("VNDirect_quote",
+      `https://finfo-api.vndirect.com.vn/v4/stock_prices?code=${t}&sort=-date&size=1&page=1`,
+      { "Origin": "https://dchart.vndirect.com.vn", "Referer": "https://dchart.vndirect.com.vn/" }
+    ),
+    testSource("Stooq",
+      `https://stooq.com/q/d/l/?s=${t.toLowerCase()}.vn&i=d&d1=20260301&d2=20260310`
+    ),
+    testSource("Yahoo_chart",
+      `https://query1.finance.yahoo.com/v8/finance/chart/${t}.VN?interval=1d&range=5d`
+    ),
+    testSource("Yahoo_query2",
+      `https://query2.finance.yahoo.com/v8/finance/chart/${t}.VN?interval=1d&range=5d`
+    ),
+  ]);
+
+  const names = ["VNDirect_quote", "Stooq", "Yahoo_chart", "Yahoo_query2"];
+  const out = {};
+  names.forEach((n, i) => out[n] = results[i]);
+
+  const working = names.filter((n, i) => results[i].ok);
+
   return res.status(200).json({
-    symbol: sym,
+    ticker: t,
     timestamp: new Date().toISOString(),
-    results,
-    status: allOk ? "✅ Yahoo Finance hoạt động" : "❌ Có lỗi",
+    working_sources: working,
+    status: working.length > 0 ? `✅ ${working.join(", ")} đang hoạt động` : "❌ Tất cả đều fail",
+    details: out,
   });
 }
